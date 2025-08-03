@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Leak Detector Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-warning { background: #ffc107; color: black; }
+        .btn-success { background: #28a745; color: white; }
+        
+        #output {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .leak-demo {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Memory Leak Detector Demo</h1>
+        <p>This demo shows how the Memory Leak Detector identifies various types of memory leaks in web applications.</p>
+        
+        <div class="controls">
+            <button onclick="startDetector()" class="btn-primary">Start Detector</button>
+            <button onclick="stopDetector()" class="btn-danger">Stop Detector</button>
+            <button onclick="clearOutput()" class="btn-warning">Clear Log</button>
+            <button onclick="generateReport()" class="btn-success">Generate Report</button>
+        </div>
+
+        <div class="leak-demo">
+            <h3>🧪 Create Memory Leaks for Testing:</h3>
+            <div class="controls">
+                <button onclick="createEventListenerLeaks()" class="btn-warning">Event Listener Leaks</button>
+                <button onclick="createTimerLeaks()" class="btn-warning">Timer Leaks</button>
+                <button onclick="createDOMLeaks()" class="btn-warning">DOM Reference Leaks</button>
+                <button onclick="cleanup()" class="btn-success">Clean Up Leaks</button>
+            </div>
+        </div>
+
+        <h3>📊 Detection Output:</h3>
+        <div id="output"></div>
+    </div>
+
+    <script type="module">
+        // Import the built library (in a real app you'd use: import MemoryLeakDetector from 'memory-leak-detector')
+        import MemoryLeakDetector from './dist/index.js';
+
+        let detector = null;
+        let leakCleanup = [];
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const icon = type === 'error' ? '🚨' : type === 'warn' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️';
+            output.textContent += `[${timestamp}] ${icon} ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        window.startDetector = function() {
+            if (detector) {
+                log('Detector is already running', 'warn');
+                return;
+            }
+
+            detector = new MemoryLeakDetector({
+                reportInterval: 10000, // 10 seconds for demo
+                enableEventListenerTracking: true,
+                enableTimerTracking: true,
+                enableDOMTracking: true,
+                onReport: (report) => {
+                    log(`Memory Report: ${(report.heapUsed / 1024 / 1024).toFixed(2)}MB used`);
+                    if (report.leakSuspects.length > 0) {
+                        log(`Found ${report.leakSuspects.length} potential leaks:`, 'warn');
+                        report.leakSuspects.forEach(leak => {
+                            log(`  - ${leak.type}: ${leak.description} (${leak.severity})`, 'warn');
+                        });
+                    }
+                    if (report.recommendations.length > 0) {
+                        log('Recommendations:', 'info');
+                        report.recommendations.forEach(rec => {
+                            log(`  - ${rec}`, 'info');
+                        });
+                    }
+                },
+                onLeak: (leak) => {
+                    if (leak.severity === 'critical') {
+                        log(`CRITICAL LEAK: ${leak.description}`, 'error');
+                    }
+                }
+            });
+
+            detector.start();
+            log('Memory Leak Detector started', 'success');
+        };
+
+        window.stopDetector = function() {
+            if (!detector) {
+                log('No detector running', 'warn');
+                return;
+            }
+
+            detector.cleanup();
+            detector = null;
+            log('Memory Leak Detector stopped', 'success');
+        };
+
+        window.clearOutput = function() {
+            document.getElementById('output').textContent = '';
+        };
+
+        window.generateReport = function() {
+            if (!detector) {
+                log('Start detector first', 'warn');
+                return;
+            }
+
+            const report = detector.generateReport();
+            log('Manual report generated', 'success');
+        };
+
+        window.createEventListenerLeaks = function() {
+            log('Creating event listener leaks...', 'warn');
+            
+            for (let i = 0; i < 50; i++) {
+                const button = document.createElement('button');
+                button.textContent = `Leak Button ${i}`;
+                document.body.appendChild(button);
+                
+                const handler = () => console.log(`Button ${i} clicked`);
+                button.addEventListener('click', handler);
+                
+                // Store for cleanup (in real leaks, this wouldn't exist)
+                leakCleanup.push(() => {
+                    button.removeEventListener('click', handler);
+                    button.remove();
+                });
+            }
+            
+            log('Created 50 event listener leaks', 'warn');
+        };
+
+        window.createTimerLeaks = function() {
+            log('Creating timer leaks...', 'warn');
+            
+            for (let i = 0; i < 30; i++) {
+                const interval = setInterval(() => {
+                    // This creates many uncleaned intervals
+                    Math.random();
+                }, 1000);
+                
+                // Store for cleanup
+                leakCleanup.push(() => clearInterval(interval));
+            }
+            
+            log('Created 30 timer leaks', 'warn');
+        };
+
+        window.createDOMLeaks = function() {
+            log('Creating DOM reference leaks...', 'warn');
+            
+            const elements = [];
+            for (let i = 0; i < 500; i++) {
+                const div = document.createElement('div');
+                div.innerHTML = `<span>Leaked Element ${i}</span><p>Some content</p>`;
+                elements.push(div); // Keeping references to detached elements
+            }
+            
+            // Store for cleanup
+            leakCleanup.push(() => {
+                elements.length = 0;
+            });
+            
+            log('Created 500 DOM reference leaks', 'warn');
+        };
+
+        window.cleanup = function() {
+            log('Cleaning up created leaks...', 'success');
+            
+            leakCleanup.forEach(cleanup => {
+                try {
+                    cleanup();
+                } catch (e) {
+                    console.error('Cleanup error:', e);
+                }
+            });
+            
+            leakCleanup = [];
+            log('All test leaks cleaned up', 'success');
+        };
+
+        // Auto-start detector on page load
+        log('Memory Leak Detector Demo loaded', 'success');
+        log('Click "Start Detector" to begin monitoring', 'info');
+    </script>
+</body>
+</html>

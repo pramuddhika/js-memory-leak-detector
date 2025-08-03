@@ -1,0 +1,45 @@
+{
+  "name": "js-memory-leak-detector",
+  "version": "1.0.0",
+  "description": "A comprehensive memory leak detector for web applications with Redux Toolkit support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "memory-leak",
+    "performance",
+    "debugging",
+    "memory-monitoring",
+    "web-vitals",
+    "redux-toolkit",
+    "memory-profiling",
+    "leak-detection",
+    "browser-performance",
+    "typescript"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/js-memory-leak-detector.git"
+  },
+  "homepage": "https://github.com/yourusername/js-memory-leak-detector#readme",
+  "bugs": {
+    "url": "https://github.com/yourusername/js-memory-leak-detector/issues"
+  }
+}
