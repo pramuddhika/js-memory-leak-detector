@@ -1,6 +1,6 @@
 {
   "name": "js-memory-leak-detector",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A comprehensive memory leak detector for web applications with Redux Toolkit support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
