@@ -36,10 +36,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/js-memory-leak-detector.git"
+    "url": "https://github.com/pramuddhika/js-memory-leak-detector.git"
   },
-  "homepage": "https://github.com/yourusername/js-memory-leak-detector#readme",
+  "homepage": "https://github.com/pramuddhika/js-memory-leak-detector#readme",
   "bugs": {
-    "url": "https://github.com/yourusername/js-memory-leak-detector/issues"
+    "url": "https://github.com/pramuddhika/js-memory-leak-detector/issues"
   }
 }

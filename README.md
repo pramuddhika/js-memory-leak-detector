@@ -200,6 +200,14 @@ const elementMap = new WeakMap();
 
 MIT
 
+## Repository
+
+🔗 **GitHub**: [js-memory-leak-detector](https://github.com/pramuddhika/js-memory-leak-detector)
+
+- **Issues**: [Report bugs and request features](https://github.com/pramuddhika/js-memory-leak-detector/issues)
+- **Pull Requests**: [Contribute code](https://github.com/pramuddhika/js-memory-leak-detector/pulls)
+- **Releases**: [View all releases](https://github.com/pramuddhika/js-memory-leak-detector/releases)
+
 ## Contributing
 
 Contributions welcome! Please read our contributing guidelines and submit pull requests.
