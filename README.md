@@ -1,6 +1,6 @@
 # Memory Leak Detector
 
-🔍 A comprehensive memory leak detector for web applications that helps identify and prevent memory leaks in JavaScript/TypeScript applications.
+A comprehensive memory leak detector for web applications that helps identify and prevent memory leaks in JavaScript/TypeScript applications.
 
 ## Features
 
@@ -145,10 +145,10 @@ export default {
 
 ### Event Listeners
 ```javascript
-// ❌ BAD - Memory leak
+//  BAD - Memory leak
 document.addEventListener('click', handleClick);
 
-// ✅ GOOD - Cleanup
+//  GOOD - Cleanup
 const cleanup = () => document.removeEventListener('click', handleClick);
 document.addEventListener('click', handleClick);
 // Call cleanup when component unmounts
@@ -156,21 +156,21 @@ document.addEventListener('click', handleClick);
 
 ### Timers
 ```javascript
-// ❌ BAD - Memory leak  
+//  BAD - Memory leak  
 const interval = setInterval(() => {}, 1000);
 
-// ✅ GOOD - Cleanup
+//  GOOD - Cleanup
 const interval = setInterval(() => {}, 1000);
 clearInterval(interval); // Clear when component unmounts
 ```
 
 ### DOM References
 ```javascript
-// ❌ BAD - Memory leak
+//  BAD - Memory leak
 let elements = [];
 elements.push(document.querySelector('.item')); // Keeps DOM ref
 
-// ✅ GOOD - Use WeakMap or clear references
+//  GOOD - Use WeakMap or clear references
 const elementMap = new WeakMap();
 ```
 
@@ -204,7 +204,7 @@ Copyright (c) 2025 pramuddhika
 
 ## Repository
 
-🔗 **GitHub**: [js-memory-leak-detector](https://github.com/pramuddhika/js-memory-leak-detector)
+ **GitHub**: [js-memory-leak-detector](https://github.com/pramuddhika/js-memory-leak-detector)
 
 - **Issues**: [Report bugs and request features](https://github.com/pramuddhika/js-memory-leak-detector/issues)
 - **Pull Requests**: [Contribute code](https://github.com/pramuddhika/js-memory-leak-detector/pulls)
