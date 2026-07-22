@@ -7,6 +7,7 @@ A comprehensive memory leak detector for web applications that helps identify an
 - **Event Listener Tracking** - Detects unremoved event listeners
 - **Timer Tracking** - Identifies uncleaned timeouts and intervals  
 - **DOM Reference Tracking** - Finds detached DOM nodes and excessive DOM growth
+- **Performance Observer Tracking** - Watches long tasks, navigation, and event entry types for UI bottlenecks and slow interactions
 - **Memory Growth Analysis** - Monitors heap usage and identifies suspicious growth patterns
 - **Real-time Reporting** - Configurable reporting intervals with detailed leak suspects
 - **TypeScript Support** - Full TypeScript definitions included
@@ -46,7 +47,7 @@ const detector = new MemoryLeakDetector({
   enableEventListenerTracking: true,    // Track event listeners
   enableTimerTracking: true,             // Track timers
   enableDOMTracking: true,               // Track DOM nodes
-  enablePerformanceObserver: true,       // Use Performance Observer API
+  enablePerformanceObserver: true,       // Use Performance Observer API for long tasks and bottlenecks
   reportInterval: 30000,                 // Report every 30 seconds
   memoryThreshold: 300,                  // Alert when memory > 300MB
   onReport: (report) => {

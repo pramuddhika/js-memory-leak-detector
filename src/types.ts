@@ -29,6 +29,13 @@ export interface DetectorConfig {
   onLeak?: (suspect: LeakSuspect) => void;
 }
 
+export interface PerformanceObserverSummary {
+  longTasks: number;
+  totalLongTaskDuration: number;
+  lastLongTaskDuration: number;
+  observations: number;
+}
+
 export interface MemorySnapshot {
   timestamp: number;
   memory: {

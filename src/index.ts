@@ -3,6 +3,7 @@ export { EventListenerTracker } from './event-listener-tracker';
 export { TimerTracker } from './timer-tracker';
 export { DOMTracker } from './dom-tracker';
 export { ReduxTracker } from './redux-tracker';
+export { PerformanceObserverTracker } from './performance-observer-tracker';
 export * from './types';
 
 // Default export for convenience

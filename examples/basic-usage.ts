@@ -69,6 +69,16 @@ for (let i = 0; i < 1000; i++) {
   elements.push(div); // Keeping references to detached elements
 }
 
+// 4. Simulate a slow interaction to trigger the performance observer path
+const slowTask = () => {
+  const start = performance.now();
+  while (performance.now() - start < 250) {
+    // Keep the main thread busy briefly to emulate a long task
+  }
+};
+
+slowTask();
+
 console.log('✅ Memory leaks created. Watch for reports...');
 
 // Clean up after 30 seconds for demo

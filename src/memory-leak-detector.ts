@@ -3,6 +3,7 @@ import { EventListenerTracker } from './event-listener-tracker';
 import { TimerTracker } from './timer-tracker';
 import { DOMTracker } from './dom-tracker';
 import { ReduxTracker } from './redux-tracker';
+import { PerformanceObserverTracker } from './performance-observer-tracker';
 
 export class MemoryLeakDetector {
   private config: Required<DetectorConfig>;
@@ -10,6 +11,7 @@ export class MemoryLeakDetector {
   private timerTracker?: TimerTracker;
   private domTracker?: DOMTracker;
   private reduxTracker?: ReduxTracker;
+  private performanceObserverTracker?: PerformanceObserverTracker;
   private snapshots: MemorySnapshot[] = [];
   private reportInterval?: number;
   private isRunning = false;
@@ -45,6 +47,10 @@ export class MemoryLeakDetector {
 
     if (this.config.enableReduxTracking) {
       this.reduxTracker = new ReduxTracker();
+    }
+
+    if (this.config.enablePerformanceObserver) {
+      this.performanceObserverTracker = new PerformanceObserverTracker();
     }
   }
 
@@ -139,6 +145,10 @@ export class MemoryLeakDetector {
 
     if (this.reduxTracker) {
       suspects.push(...this.reduxTracker.detectLeaks());
+    }
+
+    if (this.performanceObserverTracker) {
+      suspects.push(...this.performanceObserverTracker.detectLeaks());
     }
 
     // Analyze memory growth
@@ -244,6 +254,7 @@ export class MemoryLeakDetector {
     this.timerTracker?.cleanup();
     this.domTracker?.cleanup();
     this.reduxTracker?.cleanup();
+    this.performanceObserverTracker?.cleanup();
     
     this.snapshots = [];
   }
