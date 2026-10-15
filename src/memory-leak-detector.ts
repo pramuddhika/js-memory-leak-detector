@@ -1,8 +1,16 @@
-import { DetectorConfig, MemoryLeakReport, MemorySnapshot, LeakSuspect } from './types';
+import {
+  DetectorConfig,
+  MemoryLeakReport,
+  MemorySnapshot,
+  LeakSuspect,
+  MemoryApiKind
+} from './types';
 import { EventListenerTracker } from './event-listener-tracker';
 import { TimerTracker } from './timer-tracker';
 import { DOMTracker } from './dom-tracker';
 import { ReduxTracker } from './redux-tracker';
+import { ReactTracker, createReactCanaryHook } from './react-tracker';
+import { DevToolsGuidance } from './devtools-guidance';
 
 export class MemoryLeakDetector {
   private config: Required<DetectorConfig>;
@@ -10,9 +18,11 @@ export class MemoryLeakDetector {
   private timerTracker?: TimerTracker;
   private domTracker?: DOMTracker;
   private reduxTracker?: ReduxTracker;
+  private reactTracker?: ReactTracker;
   private snapshots: MemorySnapshot[] = [];
-  private reportInterval?: number;
+  private reportIntervalTimer?: any;
   private isRunning = false;
+  private consecutiveGrowths = 0;
 
   constructor(config: DetectorConfig = {}) {
     this.config = {
@@ -20,9 +30,12 @@ export class MemoryLeakDetector {
       enableTimerTracking: config.enableTimerTracking ?? true,
       enableDOMTracking: config.enableDOMTracking ?? true,
       enableReduxTracking: config.enableReduxTracking ?? true,
+      enableReactTracking: config.enableReactTracking ?? true,
       enablePerformanceObserver: config.enablePerformanceObserver ?? true,
+      captureStackTrace: config.captureStackTrace ?? false,
       reportInterval: config.reportInterval ?? 30000, // 30 seconds
       memoryThreshold: config.memoryThreshold ?? 300, // 300MB
+      maxDetachedNodeScan: config.maxDetachedNodeScan ?? 500,
       onReport: config.onReport ?? (() => {}),
       onLeak: config.onLeak ?? (() => {})
     };
@@ -32,19 +45,29 @@ export class MemoryLeakDetector {
 
   private init(): void {
     if (this.config.enableEventListenerTracking) {
-      this.eventTracker = new EventListenerTracker();
+      this.eventTracker = new EventListenerTracker({
+        captureStackTrace: this.config.captureStackTrace
+      });
     }
 
     if (this.config.enableTimerTracking) {
-      this.timerTracker = new TimerTracker();
+      this.timerTracker = new TimerTracker({
+        captureStackTrace: this.config.captureStackTrace
+      });
     }
 
     if (this.config.enableDOMTracking) {
-      this.domTracker = new DOMTracker();
+      this.domTracker = new DOMTracker(this.config.maxDetachedNodeScan);
     }
 
     if (this.config.enableReduxTracking) {
-      this.reduxTracker = new ReduxTracker();
+      this.reduxTracker = new ReduxTracker({
+        captureStackTrace: this.config.captureStackTrace
+      });
+    }
+
+    if (this.config.enableReactTracking) {
+      this.reactTracker = new ReactTracker();
     }
   }
 
@@ -52,16 +75,16 @@ export class MemoryLeakDetector {
     if (this.isRunning) return;
 
     this.isRunning = true;
-    
-    // Take initial snapshot
+
+    // Take initial baseline snapshot
     this.takeSnapshot();
 
     // Set up periodic reporting
-    this.reportInterval = (globalThis as any).setInterval(() => {
+    this.reportIntervalTimer = (globalThis as any).setInterval(() => {
       this.generateReport();
     }, this.config.reportInterval);
 
-    console.log('🔍 Memory Leak Detector started');
+    console.log('🔍 Memory Leak Detector started (Hint & Diagnostic Mode)');
   }
 
   stop(): void {
@@ -69,53 +92,90 @@ export class MemoryLeakDetector {
 
     this.isRunning = false;
 
-    if (this.reportInterval) {
-      (globalThis as any).clearInterval(this.reportInterval);
-      this.reportInterval = undefined;
+    if (this.reportIntervalTimer !== undefined) {
+      (globalThis as any).clearInterval(this.reportIntervalTimer);
+      this.reportIntervalTimer = undefined;
     }
 
     console.log('🛑 Memory Leak Detector stopped');
   }
 
-  private getMemoryInfo(): any {
-    // Try different ways to get memory info
-    if ((performance as any).memory) {
-      return (performance as any).memory;
+  getMemoryInfo(): {
+    heapUsed: number;
+    heapTotal: number;
+    external: number;
+    arrayBuffers: number;
+    api: MemoryApiKind;
+    isQuantized: boolean;
+  } {
+    // 1. Check legacy Chromium performance.memory
+    if (typeof performance !== 'undefined' && (performance as any).memory) {
+      const mem = (performance as any).memory;
+      return {
+        heapUsed: mem.usedJSHeapSize || 0,
+        heapTotal: mem.totalJSHeapSize || 0,
+        external: 0,
+        arrayBuffers: 0,
+        api: 'performance.memory',
+        // In modern Chromium, performance.memory is quantized for privacy/anti-fingerprinting
+        isQuantized: true
+      };
     }
-    
-    // Fallback for environments without performance.memory
+
+    // 2. Check Node.js process.memoryUsage (SSR / Tests / Tools)
+    if (typeof process !== 'undefined' && typeof process.memoryUsage === 'function') {
+      try {
+        const mem = process.memoryUsage();
+        return {
+          heapUsed: mem.heapUsed || 0,
+          heapTotal: mem.heapTotal || 0,
+          external: mem.external || 0,
+          arrayBuffers: mem.arrayBuffers || 0,
+          api: 'process.memoryUsage',
+          isQuantized: false
+        };
+      } catch {
+        // Ignore fallback
+      }
+    }
+
+    // 3. Fallback for Firefox, Safari, and environments without direct memory APIs
     return {
       heapUsed: 0,
       heapTotal: 0,
       external: 0,
-      arrayBuffers: 0
+      arrayBuffers: 0,
+      api: 'none',
+      isQuantized: false
     };
   }
 
-  private takeSnapshot(): MemorySnapshot {
+  takeSnapshot(): MemorySnapshot {
     const memory = this.getMemoryInfo();
-    
+
     const snapshot: MemorySnapshot = {
       timestamp: Date.now(),
       memory: {
-        heapUsed: memory.usedJSHeapSize || 0,
-        heapTotal: memory.totalJSHeapSize || 0,
-        external: memory.external || 0,
-        arrayBuffers: memory.arrayBuffers || 0
+        heapUsed: memory.heapUsed,
+        heapTotal: memory.heapTotal,
+        external: memory.external,
+        arrayBuffers: memory.arrayBuffers,
+        api: memory.api
       },
       counts: {
         eventListeners: this.eventTracker?.getActiveListeners() || 0,
         timers: this.timerTracker?.getActiveTimers() || 0,
         domNodes: this.domTracker?.getDOMNodeCount() || 0,
-        detachedNodes: this.domTracker?.getDetachedNodeCount() || 0
+        detachedNodes: this.domTracker?.getDetachedNodeCount() || 0,
+        retainedComponents: this.reactTracker?.getRetainedComponentsCount() || 0
       }
     };
 
     this.snapshots.push(snapshot);
-    
-    // Keep only last 100 snapshots
-    if (this.snapshots.length > 100) {
-      this.snapshots = this.snapshots.slice(-100);
+
+    // Keep only last 50 snapshots
+    if (this.snapshots.length > 50) {
+      this.snapshots = this.snapshots.slice(-50);
     }
 
     return snapshot;
@@ -124,7 +184,7 @@ export class MemoryLeakDetector {
   private detectLeaks(): LeakSuspect[] {
     const suspects: LeakSuspect[] = [];
 
-    // Collect suspects from all trackers
+    // Collect suspects from individual trackers
     if (this.eventTracker) {
       suspects.push(...this.eventTracker.detectLeaks());
     }
@@ -141,20 +201,63 @@ export class MemoryLeakDetector {
       suspects.push(...this.reduxTracker.detectLeaks());
     }
 
-    // Analyze memory growth
+    if (this.reactTracker) {
+      suspects.push(...this.reactTracker.detectLeaks());
+    }
+
+    // Check memory API limitations and advise the developer
+    const memInfo = this.getMemoryInfo();
+    if (memInfo.api === 'none') {
+      suspects.push({
+        type: 'quantized-memory-notice',
+        severity: 'low',
+        description: 'Raw memory API unavailable in this browser (Firefox/Safari). Use Chrome DevTools -> Memory tab for profiling.',
+        devToolsHint: 'Open Chrome or Edge DevTools -> Memory panel to take heap snapshots.'
+      });
+    } else if (memInfo.isQuantized) {
+      // Mention quantization only once or if threshold is exceeded
+      if (this.snapshots.length <= 1) {
+        suspects.push({
+          type: 'quantized-memory-notice',
+          severity: 'low',
+          description: 'performance.memory is coarse and quantized. Small leaks are only visible via Chrome DevTools Heap Snapshots.',
+          devToolsHint: 'Use 3-snapshot heap comparison in Chrome DevTools to locate subtle leaks.'
+        });
+      }
+    }
+
+    // Analyze sustained memory growth across snapshots
     if (this.snapshots.length >= 2) {
       const latest = this.snapshots[this.snapshots.length - 1];
       const previous = this.snapshots[this.snapshots.length - 2];
-      
+
       const memoryGrowth = latest.memory.heapUsed - previous.memory.heapUsed;
       const growthMB = memoryGrowth / (1024 * 1024);
+      const totalMB = latest.memory.heapUsed / (1024 * 1024);
 
-      if (growthMB > 10) { // 10MB growth
+      if (growthMB > 25) {
+        this.consecutiveGrowths++;
+      } else if (growthMB < 0) {
+        // GC occurred or memory dropped
+        this.consecutiveGrowths = Math.max(0, this.consecutiveGrowths - 1);
+      }
+
+      // Check if memory has sustained rapid growth across 3+ snapshots
+      if (this.consecutiveGrowths >= 3) {
         suspects.push({
           type: 'closure',
-          severity: growthMB > 50 ? 'critical' : 'high',
-          description: `Memory increased by ${growthMB.toFixed(2)}MB in ${this.config.reportInterval / 1000}s`,
-          count: Math.round(growthMB)
+          severity: totalMB > this.config.memoryThreshold ? 'critical' : 'high',
+          description: `Sustained heap growth detected across ${this.consecutiveGrowths} consecutive intervals (latest: +${growthMB.toFixed(1)}MB, total: ${totalMB.toFixed(1)}MB)`,
+          count: Math.round(totalMB),
+          devToolsHint: 'Chrome DevTools -> Memory -> Take Heap Snapshot -> Compare against initial snapshot to see growing constructors.'
+        });
+      } else if (totalMB > this.config.memoryThreshold) {
+        suspects.push({
+          type: 'closure',
+          severity: 'critical',
+          description: `Heap usage (${totalMB.toFixed(1)}MB) exceeded configured threshold of ${this.config.memoryThreshold}MB`,
+          count: Math.round(totalMB),
+          devToolsHint: 'Check for unbounded caches, global arrays, or large uncompressed assets retained in memory.'
         });
       }
     }
@@ -165,39 +268,45 @@ export class MemoryLeakDetector {
   private generateRecommendations(suspects: LeakSuspect[]): string[] {
     const recommendations: string[] = [];
 
-    suspects.forEach(suspect => {
+    for (const suspect of suspects) {
       switch (suspect.type) {
         case 'event-listener':
-          recommendations.push('Remove event listeners when components unmount or are no longer needed');
+          recommendations.push('Event Listeners: Ensure removeEventListener is called on unmount or use AbortController signal in useEffect.');
           break;
         case 'timer':
-          recommendations.push('Clear intervals and timeouts when they are no longer needed');
+          recommendations.push('Timers: Ensure intervals and long timeouts return a clearInterval/clearTimeout cleanup callback in useEffect.');
           break;
         case 'dom-reference':
-          recommendations.push('Avoid keeping references to DOM elements after they are removed');
-          break;
         case 'detached-dom':
-          recommendations.push('Check for detached DOM nodes that should be garbage collected');
+          recommendations.push('Detached DOM: Avoid holding DOM element references in module-level variables or closures after elements are removed.');
           break;
-        case 'closure':
-          recommendations.push('Review closures that might be holding references to large objects');
+        case 'retained-component':
+          recommendations.push('Retained React Component: An unmounted component tree is still referenced by a stale closure, global listener, or store subscription.');
           break;
         case 'redux-subscription':
-          recommendations.push('Ensure Redux store subscriptions are properly unsubscribed when components unmount');
+          recommendations.push('Redux Subscriptions: Ensure store.subscribe listeners unsubscribe when the enclosing component unmounts.');
           break;
         case 'redux-selector':
-          recommendations.push('Check for infinite re-renders caused by improperly memoized selectors');
+          recommendations.push('Redux Selectors: Memoize selectors with createSelector (Reselect) to avoid triggering infinite re-render cycles.');
+          break;
+        case 'closure':
+          recommendations.push('Closures & Retainers: Review closures capturing outer scopes or large objects; profile using Chrome DevTools Heap Snapshot.');
+          break;
+        case 'quantized-memory-notice':
+          recommendations.push('Profiling Guidance: Use Chrome DevTools Memory panel (Heap snapshot / Allocation timeline) for conclusive profiling before shipping.');
           break;
       }
-    });
+    }
 
-    return [...new Set(recommendations)]; // Remove duplicates
+    return [...new Set(recommendations)];
   }
 
   generateReport(): MemoryLeakReport {
     const snapshot = this.takeSnapshot();
     const suspects = this.detectLeaks();
     const recommendations = this.generateRecommendations(suspects);
+    const devToolsGuidance = DevToolsGuidance.formatDevToolsAdvice(suspects);
+    const memInfo = this.getMemoryInfo();
 
     const report: MemoryLeakReport = {
       timestamp: snapshot.timestamp,
@@ -205,16 +314,19 @@ export class MemoryLeakDetector {
       heapTotal: snapshot.memory.heapTotal,
       external: snapshot.memory.external,
       arrayBuffers: snapshot.memory.arrayBuffers,
+      memoryApi: memInfo.api,
+      isMemoryQuantized: memInfo.isQuantized,
       leakSuspects: suspects,
-      recommendations
+      recommendations,
+      devToolsGuidance
     };
 
-    // Notify about individual leaks
-    suspects.forEach(suspect => {
+    // Notify individual leak listeners
+    for (const suspect of suspects) {
       this.config.onLeak(suspect);
-    });
+    }
 
-    // Send report
+    // Send full report
     this.config.onReport(report);
 
     return report;
@@ -224,27 +336,57 @@ export class MemoryLeakDetector {
     return [...this.snapshots];
   }
 
-  // Public methods for Redux integration
-  patchReduxStore(store: any): void {
-    if (this.reduxTracker) {
-      this.reduxTracker.patchStore(store);
+  // React helpers
+  getReactTracker(): ReactTracker | undefined {
+    return this.reactTracker;
+  }
+
+  /**
+   * Monitor an unmounted component canary object to see if it is garbage collected.
+   */
+  trackUnmountedComponent(componentName: string, target: object, metadata?: Record<string, any>): void {
+    this.reactTracker?.registerUnmountedCanary(componentName, target, metadata);
+  }
+
+  /**
+   * Creates a React hook for tracking unmounted component tree retention.
+   * @param customReact Optional React instance for bundler environments where React is not global
+   */
+  createReactHook(customReact?: any): (componentName: string, metadata?: Record<string, any>) => void {
+    if (!this.reactTracker) {
+      return () => {};
     }
+    return createReactCanaryHook(this.reactTracker, customReact);
+  }
+
+  // Redux helpers
+  patchReduxStore(store: any): void {
+    this.reduxTracker?.patchStore(store);
   }
 
   trackSelectorUsage(selectorName: string): void {
-    if (this.reduxTracker) {
-      this.reduxTracker.trackSelectorUsage(selectorName);
-    }
+    this.reduxTracker?.trackSelectorUsage(selectorName);
+  }
+
+  // Static DevTools helpers
+  static getProfilingWorkflow() {
+    return DevToolsGuidance.getProfilingWorkflow();
+  }
+
+  static getReactReviewPatterns() {
+    return DevToolsGuidance.getReactReviewPatterns();
   }
 
   cleanup(): void {
     this.stop();
-    
+
     this.eventTracker?.cleanup();
     this.timerTracker?.cleanup();
     this.domTracker?.cleanup();
     this.reduxTracker?.cleanup();
-    
+    this.reactTracker?.cleanup();
+
     this.snapshots = [];
+    this.consecutiveGrowths = 0;
   }
 }
