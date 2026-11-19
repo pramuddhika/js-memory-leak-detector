@@ -1,32 +1,44 @@
 # JS Memory Leak Detector
 
 > **A lightweight development-time diagnostic & hint toolkit for JavaScript, TypeScript, and React applications.**  
-> *Notice: Fine for hints and early developer warnings — not a substitute for Chrome DevTools heap profiling before you ship.*
+> *Identify leaks, stale closures, and retained DOM/component trees early before shipping to production.*
+
+<div align="center">
+
+[![Documentation](https://img.shields.io/badge/Documentation-Visit%20Official%20Docs-007acc?style=for-the-badge&logo=googledocs&logoColor=white)](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)
+[![Config Builder](https://img.shields.io/badge/Config%20Builder-Interactive%20Tool-2ea44f?style=for-the-badge&logo=codewars&logoColor=white)](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/#/config-builder)
+[![npm version](https://img.shields.io/npm/v/js-memory-leak-detector?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/js-memory-leak-detector)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+</div>
 
 ---
 
-## 🎯 Architecture & Reality: Bottlenecks & Fixes
+## 🌐 Official Web Documentation & Interactive Portal
 
-Modern browser memory behavior and framework architectures introduce nuanced challenges:
+> 📢 **Complete documentation, in-depth architectural guides, and interactive tools are available on our official website:**  
+> 👉 **[Visit the Official Documentation Portal →](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)**
 
-| Bottleneck / Limitation | Reality | How We Solve It |
+All comprehensive guides, API references, framework integrations, and diagnostic workflows are hosted in the web documentation:
+
+| Resource | Direct Link | Description |
 | :--- | :--- | :--- |
-| **`performance.memory` is rough & coarse** | Non-standard Chromium-only API; completely absent in Firefox and Safari. In Chrome, memory numbers are quantized and heavily rounded (often in ~100KB–1MB buckets or 20-minute windows) for site-isolation and anti-fingerprinting. Small leaks are invisible here. | Multi-tier detection (`performance.measureUserAgentSpecificMemory`, `performance.memory`, `process.memoryUsage`). Explicit `isMemoryQuantized` flags, and embedded **Chrome DevTools Memory Profiler** workflows. |
-| **React Retained Component Trees & Stale Closures** | React's Fiber architecture keeps state, props, and closures tied to component lifecycles. If an outer listener or global store retains a callback from an unmounted component, the *entire component tree* is retained in memory. Aggregate heap numbers cannot identify which component leaked. | Component Canary tracking (`useRetainedComponentCanary`) powered by `WeakRef` and `FinalizationRegistry`. Flags exact unmounted component names still retained in memory after unmount. |
-| **The "Cleanup Contract" in React `useEffect`** | A detector cannot fix code for you; React already expects teardown functions returned from `useEffect`. The ultimate defense is code review and robust patterns. | Built-in **React Review & Cleanup Patterns Guide** (e.g. `AbortController` signals for zero-effort listener and fetch teardown, ref patterns for stale closure prevention). |
-| **Self-Inflicted Detector Leaks (Fixed)** | Naive memory trackers often retain references in strong `Set`s or `Map`s, causing the very memory leaks they purport to detect. For example, keeping detached DOM nodes in a strong `Set<Node>` prevents garbage collection! | All trackers re-engineered with `WeakRef`, `WeakMap`, and `FinalizationRegistry`. Executed `setTimeout` instances are automatically purged on completion, and `{ once: true }` & `{ signal: AbortSignal }` options are natively supported. |
+| 📖 **Complete Documentation** | **[Documentation Hub](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)** | Full documentation covering all features, concepts, and diagnostics. |
+| ⚡ **Interactive Config Builder** | **[Open Config Builder](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/#/config-builder)** | Visually generate, test, and copy ready-to-use configuration code. |
+| ⚛️ **React Canary & Patterns** | **[React Integration Guide](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)** | Retained component trees, stale closures, and `AbortController` teardown. |
+| 🔬 **Chrome DevTools Guide** | **[DevTools Profiling Guide](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)** | 3-snapshot heap profiling workflow, detached DOM nodes, and CI assertions. |
 
 ---
 
-## 🚀 Quick Start
+## ⚡ Quick Start
 
-### Installation
+### 1. Installation
 
 ```bash
 npm install js-memory-leak-detector
 ```
 
-### Basic Setup
+### 2. Basic Setup
 
 ```typescript
 import MemoryLeakDetector from 'js-memory-leak-detector';
@@ -36,221 +48,105 @@ const detector = new MemoryLeakDetector({
   onLeak: (suspect) => {
     console.warn(`[Leak Hint] ${suspect.type}: ${suspect.description}`);
     if (suspect.devToolsHint) {
-      console.info(`  💡 DevTools: ${suspect.devToolsHint}`);
+      console.info(`  💡 DevTools Hint: ${suspect.devToolsHint}`);
     }
   },
   onReport: (report) => {
-    console.log(`Heap Used: ${(report.heapUsed / 1024 / 1024).toFixed(2)} MB (API: ${report.memoryApi})`);
+    console.log(`Heap: ${(report.heapUsed / 1024 / 1024).toFixed(2)} MB (${report.memoryApi})`);
   }
 });
 
 detector.start();
 
-// Stop when done or on application teardown
+// Stop when tearing down or in production builds
 detector.stop();
 ```
 
+> 🛠️ **Want an easy setup without writing boilerplate by hand?**  
+> Use the **[Interactive Configuration Builder](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/#/config-builder)** to configure your thresholds and copy customized code in one click!
+
 ---
 
-## ⚛️ React Integration & Retained Component Canaries
+## 🚀 Key Capabilities
 
-### Detecting Retained Component Trees (`useRetainedComponentCanary`)
+- **Component Canary Tracking (React)**: Pinpoints unmounted React components whose Fiber nodes, hooks, or closures remain retained in memory after unmount using `WeakRef` & `FinalizationRegistry`.
+- **Zero Self-Retention Guarantee**: Built with weak references throughout all trackers (`WeakRef`, `WeakMap`, `FinalizationRegistry`) so the detector never prevents garbage collection or causes leaks itself.
+- **Detached DOM Element Detection**: Tracks detached DOM elements and unmounted subtrees held in memory by forgotten references or global listeners.
+- **Event Listeners & Timers**: Tracks active listeners on `window`, `document`, and DOM nodes (with native support for `{ once: true }` and `AbortSignal`), and auto-purges completed timeouts.
+- **Redux & Store Subscriptions**: Monitors active subscriptions and flags high-frequency selector re-computations.
+- **Actionable Chrome DevTools Guidance**: Every emitted warning includes actionable hints for inspecting heap snapshots in Chrome DevTools.
 
-In React, when a component unmounts, its closures and DOM subtrees should be collected by the Garbage Collector. If an uncleaned event listener, interval, or global store holds a reference to a function inside that component, the **entire component tree is retained**.
+---
+
+## ⚙️ Configuration Reference
+
+Use the **[Interactive Config Builder](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/#/config-builder)** to generate your config visually.
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `enableEventListenerTracking` | `boolean` | `true` | Monitors event listeners on DOM nodes, `window`, and `document`. |
+| `enableTimerTracking` | `boolean` | `true` | Tracks intervals and timeouts (auto-purging executed timeouts). |
+| `enableDOMTracking` | `boolean` | `true` | Monitors detached DOM nodes via `WeakRef` and `FinalizationRegistry`. |
+| `enableReduxTracking` | `boolean` | `true` | Tracks store subscriptions and selector re-computations. |
+| `enableReactTracking` | `boolean` | `true` | Enables canary tracking for unmounted React component tree retention. |
+| `captureStackTrace` | `boolean` | `false` | Captures stack traces on allocation (disabled by default for low overhead). |
+| `reportInterval` | `number` | `30000` | Periodic reporting interval in milliseconds. |
+| `memoryThreshold` | `number` | `300` | Alert threshold in MB for sustained memory expansion. |
+| `onLeak` | `(suspect: LeakSuspect) => void` | `noop` | Callback triggered when a leak suspect is identified. |
+| `onReport` | `(report: MemoryLeakReport) => void` | `noop` | Periodic full memory report callback. |
+
+*For complete API signatures and advanced settings, see the **[Official Documentation](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)**.*
+
+---
+
+## ⚛️ React Integration
 
 ```tsx
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import MemoryLeakDetector from 'js-memory-leak-detector';
 
 const detector = new MemoryLeakDetector();
 detector.start();
 
-// Create the canary hook for React
+// Create the canary hook for React components
 export const useRetainedComponentCanary = detector.createReactHook();
 
-export function UserDashboardModal({ userId, onClose }: { userId: string; onClose: () => void }) {
-  // Registers a lightweight canary token with WeakRef & FinalizationRegistry
-  // If this component is unmounted but still retained in memory after 15s, a warning is emitted!
+export function UserDashboardModal({ userId }: { userId: string }) {
+  // Emits a warning if this component unmounts but remains retained in memory after 15s
   useRetainedComponentCanary('UserDashboardModal', { userId });
 
-  // ...
-  return <div>Dashboard Content</div>;
+  return <div>Modal Content</div>;
 }
 ```
 
----
-
-## 🛡️ React Best Practices: Patterns + Review
-
-React expects cleanup functions in `useEffect`. Use these production patterns to guarantee zero memory leaks:
-
-### 1. The `AbortController` Pattern (Cleanest Teardown)
-
-Instead of manually maintaining dozens of `removeEventListener` calls, pass an `AbortSignal`. A single `controller.abort()` call tears down all listeners and network requests on unmount!
-
-```tsx
-useEffect(() => {
-  const controller = new AbortController();
-  const { signal } = controller;
-
-  // Window/Document listeners
-  window.addEventListener('resize', handleResize, { signal });
-  window.addEventListener('keydown', handleKeydown, { signal });
-
-  // Fetch requests
-  fetch(`/api/data`, { signal })
-    .then(r => r.json())
-    .then(data => setData(data))
-    .catch(err => {
-      if (err.name !== 'AbortError') console.error(err);
-    });
-
-  // One line cleans up EVERYTHING!
-  return () => controller.abort();
-}, []);
-```
-
-### 2. Timers & Subscriptions Cleanup Contract
-
-```tsx
-useEffect(() => {
-  const timerId = setInterval(tick, 1000);
-  const unsubscribe = store.subscribe(onStateChange);
-
-  return () => {
-    clearInterval(timerId);
-    unsubscribe();
-  };
-}, []);
-```
-
-### 3. Avoiding Stale Closures with `useRef`
-
-When an event listener or timer needs access to dynamic state or callbacks, use a ref instead of re-subscribing or capturing stale closures:
-
-```tsx
-const callbackRef = useRef(onSelect);
-callbackRef.current = onSelect;
-
-useEffect(() => {
-  const handler = (e: MouseEvent) => callbackRef.current?.(e);
-  window.addEventListener('click', handler);
-  return () => window.removeEventListener('click', handler);
-}, []);
-```
+*For comprehensive React teardown patterns and `AbortController` recipes, check the **[React Guide on the Documentation Portal](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)**.*
 
 ---
 
-## 🔬 Chrome DevTools Memory Profiling Guide
+## 🔬 Chrome DevTools Heap Profiling
 
-Runtime detectors are useful for early hints, but **Chrome DevTools Memory Profiling is the gold standard** before shipping to production.
+Detectors provide early development warnings; **Chrome DevTools Memory Profiling** is the gold standard for verifying zero leaks before production.
 
-```typescript
-import { DevToolsGuidance } from 'js-memory-leak-detector';
+1. **Snapshot 1 (Baseline)**: Open DevTools (`F12`) → **Memory** tab → Take a Heap Snapshot.
+2. **Perform Action**: Execute the interaction (e.g. open/close a modal or switch views) **5–10 times**.
+3. **Snapshot 2 (Action)**: Take a second heap snapshot.
+4. **Teardown & GC**: Return to the initial view and click the **Trash Can icon** (Collect Garbage) in DevTools.
+5. **Snapshot 3 (Teardown)**: Take the third heap snapshot.
+6. **Compare**: Switch view from **Summary** to **Comparison** and compare **Snapshot 3 against Snapshot 1**. Sort by `# Delta` or `Size Delta` to inspect retained objects.
 
-// View the step-by-step profiling guide programmatically
-console.table(DevToolsGuidance.getProfilingWorkflow());
-```
-
-### The Three-Snapshot Heap Profiling Technique
-
-1. **Snapshot 1 (Baseline)**:
-   - Open Chrome DevTools (`F12`) → **Memory** tab.
-   - Choose **Heap snapshot** → click **Take snapshot**.
-2. **Perform Action**:
-   - Perform the suspected interaction (e.g. open/close modal, navigate between routes) **5 to 10 times**.
-3. **Snapshot 2 (Action)**:
-   - Take a second heap snapshot.
-4. **Teardown & GC**:
-   - Return to the initial page/view.
-   - Click the **Trash Can icon** ("Collect garbage") at top left in DevTools to force GC.
-5. **Snapshot 3 (Teardown)**:
-   - Take the third heap snapshot.
-6. **Compare Snapshots**:
-   - Switch perspective dropdown from **Summary** to **Comparison**.
-   - Compare **Snapshot 3** against **Snapshot 1**.
-   - Sort by `# Delta` or `Size Delta`. Any positive delta objects remaining after teardown represent true leaks!
-
-### Finding Detached DOM Nodes
-
-1. In **Snapshot 3**, type `Detached ` in the **Class filter** box.
-2. Select any `Detached HTMLDivElement` or `Detached HTMLElement`.
-3. In the **Retainers** pane at the bottom:
-   - **Yellow nodes**: Directly held by JavaScript variables/closures.
-   - **Red nodes**: Detached subtrees retained by an ancestor yellow node.
-   - Inspect the retainers tree to identify the exact closure or array retaining the element.
-
-### Automated Leak Detection with Memlab
-
-For continuous integration (CI) and automated regression testing:
-
-```bash
-npx memlab find-leaks --scenario=path/to/scenario.js
-```
+*Read the step-by-step walkthrough and CI automation guide with Memlab in the **[Official DevTools Documentation](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)**.*
 
 ---
 
-## ⚙️ Configuration Options
+## 🔗 Useful Links
 
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `enableEventListenerTracking` | `boolean` | `true` | Tracks event listeners on DOM nodes, `window`, and `document` via `WeakMap`. |
-| `enableTimerTracking` | `boolean` | `true` | Tracks intervals and timeouts (auto-purging executed timeouts). |
-| `enableDOMTracking` | `boolean` | `true` | Monitors detached DOM nodes via `WeakRef` and `FinalizationRegistry`. |
-| `enableReduxTracking` | `boolean` | `true` | Monitors store subscriptions and selector re-computation spikes. |
-| `enableReactTracking` | `boolean` | `true` | Enables canary tracking for unmounted React component tree retention. |
-| `captureStackTrace` | `boolean` | `false` | Captures stack traces on creation. Disabled by default to minimize memory overhead. |
-| `reportInterval` | `number` | `30000` | Periodic report interval in milliseconds (30s). |
-| `memoryThreshold` | `number` | `300` | Alert threshold in MB for sustained memory expansion. |
-| `onLeak` | `(suspect: LeakSuspect) => void` | `noop` | Callback triggered when a leak suspect is identified. |
-| `onReport` | `(report: MemoryLeakReport) => void` | `noop` | Periodic full report callback. |
-
----
-
-## 📊 Report Structure
-
-```typescript
-{
-  timestamp: 1698765432100,
-  heapUsed: 42100000,
-  heapTotal: 65200000,
-  memoryApi: 'performance.memory', // 'performance.memory' | 'process.memoryUsage' | 'none'
-  isMemoryQuantized: true,          // Indicates whether browser quantizes heap values
-  leakSuspects: [
-    {
-      type: 'retained-component',   // 'event-listener' | 'timer' | 'detached-dom' | 'retained-component' | 'redux-subscription'
-      severity: 'high',             // 'low' | 'medium' | 'high' | 'critical'
-      description: 'React component <UserDashboardModal> unmounted 25s ago but its instance/closures are still retained in memory',
-      devToolsHint: 'Open Chrome DevTools -> Memory -> Take Heap Snapshot -> Search for "UserDashboardModal" and inspect Retainers tree.'
-    }
-  ],
-  recommendations: [
-    'Retained React Component: An unmounted component tree is still referenced by a stale closure, global listener, or store subscription.',
-    'Event Listeners: Ensure removeEventListener is called on unmount or use AbortController signal in useEffect.'
-  ],
-  devToolsGuidance: [
-    '• Retained Component: In Heap Snapshot, filter by component name or "FiberNode" -> check Retainers to find which closure/subscription prevents GC.',
-    '• Recommended: Run "npx memlab find-leaks" for automated end-to-end heap leak assertions in CI.'
-  ]
-}
-```
-
----
-
-## 🧪 Testing & Verification
-
-The suite includes 100% passing tests verifying non-retention of GC-eligible targets:
-
-```bash
-npm test
-```
-
-```bash
-npm run build
-```
+- 📖 **Official Documentation**: [https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/)
+- ⚙️ **Interactive Config Builder**: [https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/#/config-builder](https://js-memory-leak-detector-docs-pramuddhikas-projects.vercel.app/#/config-builder)
+- 📦 **NPM Registry**: [https://www.npmjs.com/package/js-memory-leak-detector](https://www.npmjs.com/package/js-memory-leak-detector)
+- 🐛 **Issue Tracker**: [GitHub Issues](https://github.com/pramuddhika/js-memory-leak-detector/issues)
 
 ---
 
 ## 📄 License
 
-MIT © pramuddhika
+MIT © [pramuddhika](https://github.com/pramuddhika)
